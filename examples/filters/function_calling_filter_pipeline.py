@@ -1,15 +1,17 @@
-
 import os
 import requests
 from typing import Literal, List, Optional
 from datetime import datetime
 
+from pydantic import BaseModel
 from blueprints.function_calling_blueprint import Pipeline as FunctionCallingBlueprint
 
 
 class Pipeline(FunctionCallingBlueprint):
     class Valves(FunctionCallingBlueprint.Valves):
         # Add custom parameters here
+        pipelines: List[str] = ["*"]  # Connect to all pipelines
+        target_user_roles: List[str] = ["admin", "user"]  # Roles allowed for data retrieval
         SPACE_API_KEY: str = ""
 
     class Tools:
@@ -19,7 +21,6 @@ class Pipeline(FunctionCallingBlueprint):
         def get_current_time(self) -> str:
             """
             Get the current time.
-
             :return: The current time.
             """
             now = datetime.now()
@@ -30,11 +31,9 @@ class Pipeline(FunctionCallingBlueprint):
             """
             Retrieve space data from the external API.
             If location is provided, it can filter spaces based on location.
-
             :param location: The location to filter spaces (optional).
             :return: The available space data.
             """
-
             if self.pipeline.valves.SPACE_API_KEY == "":
                 return "Space API Key not set, please set it up."
 
@@ -65,7 +64,6 @@ class Pipeline(FunctionCallingBlueprint):
         def calculator(self, equation: str) -> str:
             """
             Calculate the result of an equation.
-
             :param equation: The equation to calculate.
             """
             try:
