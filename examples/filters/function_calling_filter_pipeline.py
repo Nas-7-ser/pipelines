@@ -51,21 +51,34 @@ class Pipeline(FunctionCallingBlueprint):
 
                 if response.status_code == 200:
                     data = response.json()
-                    print(f"Data retrieved from API: {data}")  # Debugging API response
                     if data and isinstance(data, list) and len(data) > 0:
-                        # Format the data into a human-readable string
                         space_info = f"ID: {data[0][0]}, Location: {data[0][2]}, Price: ${data[0][3]} per month, Type: {data[0][6]}"
-                        print(f"Formatted space info: {space_info}")
                         return space_info
                     else:
-                        print(f"Empty or malformed data from API: {data}")
                         return "No space data available."
                 else:
-                    print(f"Failed to retrieve space data. Status code: {response.status_code}")
                     return f"Error: Failed to retrieve data. Status code: {response.status_code}"
             except Exception as e:
-                print(f"Error occurred while calling the API: {str(e)}")
                 return f"Error occurred while retrieving data: {str(e)}"
+
+        def send_chat_message(self, message: str, user_id: int) -> str:
+            """
+            Sends a chat message to the chat API.
+            """
+            api_url = "http://127.0.0.1:59721/api/v1/chats/create"  # Adjust to your endpoint
+            data = {"message": message, "user_id": user_id}
+            headers = {
+                "Content-Type": "application/json",
+                # Add Authorization header if required
+                # "Authorization": "Bearer YOUR_API_KEY"
+            }
+
+            try:
+                response = requests.post(api_url, headers=headers, json=data)
+                response.raise_for_status()  # Raises an HTTPError for bad responses
+                return response.text
+            except requests.exceptions.HTTPError as err:
+                return f"Error: {err}"
 
     def __init__(self):
         super().__init__()
@@ -89,16 +102,23 @@ class Pipeline(FunctionCallingBlueprint):
         print(f"Request body: {body}")
         print(f"User info: {user}")
 
-        # Log the roles being checked
-        print(f"Expected roles: {self.valves.target_user_roles}")
-        print(f"User role: {user.get('role', 'unknown')}")
-
         # Initialize a response message list
         response_messages = []
 
-        # Only retrieve space data for specific user roles
+        # Check user role and perform actions
         if user.get("role", "unknown") in self.valves.target_user_roles:
-            print(f"User role verified, retrieving space data...")
+            print(f"User role verified")
+
+            # Sending a chat message (example usage)
+            chat_response = self.tools.send_chat_message("Hello, this is a test message", user.get("id", 1))
+            print(f"Chat response: {chat_response}")
+
+            response_messages.append({
+                "role": "assistant",
+                "content": f"Chat API Response: {chat_response}"
+            })
+
+            # Retrieve space data (example usage)
             api_data = self.tools.retrieve_space_data()  # Using the Tools class method
             print(f"API Data Retrieved: {api_data}")  # Debugging API response
             if api_data:
@@ -107,19 +127,16 @@ class Pipeline(FunctionCallingBlueprint):
                     "role": "assistant",
                     "content": response_message
                 })
-                print(f"Response message added: {response_message}")
             else:
-                response_message = "No available spaces found or error occurred."
                 response_messages.append({
                     "role": "assistant",
-                    "content": response_message
+                    "content": "No available spaces found or error occurred."
                 })
-                print(f"Response message added: {response_message}")
+
         else:
-            print(f"User role does not permit data retrieval.")
             response_messages.append({
                 "role": "assistant",
-                "content": "Your role does not permit space data retrieval."
+                "content": "Your role does not permit data retrieval."
             })
 
         # Append the space data or error message as the assistant's response
