@@ -1,3 +1,4 @@
+
 import os
 import requests
 from typing import Literal, List, Optional
@@ -9,7 +10,6 @@ from blueprints.function_calling_blueprint import Pipeline as FunctionCallingBlu
 
 class Pipeline(FunctionCallingBlueprint):
     class Valves(FunctionCallingBlueprint.Valves):
-        # Add custom parameters here
         pipelines: List[str] = ["*"]  # Connect to all pipelines
         target_user_roles: List[str] = ["admin", "user"]  # Roles allowed for data retrieval
         SPACE_API_KEY: str = ""
@@ -50,9 +50,13 @@ class Pipeline(FunctionCallingBlueprint):
                 response.raise_for_status()  # Raises an HTTPError for bad responses
                 data = response.json()
 
-                if data and isinstance(data, list) and len(data) > 0:
-                    # Format the data into a human-readable string
-                    space_info = f"ID: {data[0]['id']}, Location: {data[0]['location']}, Price: ${data[0]['price']} per month, Type: {data[0]['type']}"
+                # Debugging the response to check its structure
+                print(f"Data received from API: {data}")
+
+                # Handling case where data is a list of lists
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
+                    # Extracting values from the list using indices
+                    space_info = f"ID: {data[0][0]}, Location: {data[0][2]}, Price: ${data[0][3]} per month, Type: {data[0][6]}"
                     return space_info
                 else:
                     return "No available spaces found."
