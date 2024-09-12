@@ -55,8 +55,8 @@ class Pipeline(FunctionCallingBlueprint):
                     # Extracting values from the list using indices
                     space_info = f"ID: {data[0][0]}, Location: {data[0][2]}, Price: ${data[0][3]} per month, Type: {data[0][6]}"
 
-                    # Download the image
-                    image_url = data[0][7]
+                    # Download the image (make sure to handle relative URLs)
+                    image_url = self.get_full_url(data[0][7])
                     image_path = self.download_image(image_url)
                     return space_info, image_path
                 else:
@@ -65,6 +65,17 @@ class Pipeline(FunctionCallingBlueprint):
                 return f"Error occurred: {str(e)}", None
             except Exception as e:
                 return f"An error occurred while retrieving data: {str(e)}", None
+
+        def get_full_url(self, relative_url: str) -> str:
+            """
+            Construct a full URL from a relative path.
+            :param relative_url: The relative or full URL of the image.
+            :return: The full URL of the image.
+            """
+            base_url = "https://7a340f9a-48e7-44ed-8852-14cd58697a9c-00-3ohyjqpej24i8.worf.replit.dev"
+            if not relative_url.startswith("http"):
+                return f"{base_url}/{relative_url.lstrip('/')}"
+            return relative_url
 
         def download_image(self, image_url: str) -> str:
             """
