@@ -40,7 +40,7 @@ class Pipeline(FunctionCallingBlueprint):
                 "location": location if location else "",  # Optional location filter
             }
 
-            api_url = "https://example-space-api.com/api/spaces"  # Replace with the actual space API URL
+            api_url = "https://7a340f9a-48e7-44ed-8852-14cd58697a9c-00-3ohyjqpej24i8.worf.replit.dev/api/spaces"  # Replace with the actual space API URL
 
             try:
                 response = requests.get(api_url, params=params)
