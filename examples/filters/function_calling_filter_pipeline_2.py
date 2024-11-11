@@ -1,15 +1,33 @@
 import os
-import requests
+import aiohttp
+import asyncio
 from typing import Literal, List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl, ValidationError
 from blueprints.function_calling_blueprint import Pipeline as FunctionCallingBlueprint
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("pipeline.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+class Product(BaseModel):
+    content: str
+    description: str
+    image_url: HttpUrl
 
 class Pipeline(FunctionCallingBlueprint):
     class Valves(FunctionCallingBlueprint.Valves):
         pipelines: List[str] = ["*"]  # Connect to all pipelines
         target_user_roles: List[str] = ["admin", "user"]  # Roles allowed for data retrieval
-        SPACE_API_KEY: str = ""
+        PRODUCT_API_KEY: str = ""  # Updated from SPACE_API_KEY
 
     class Tools:
         def __init__(self, pipeline) -> None:
@@ -24,64 +42,83 @@ class Pipeline(FunctionCallingBlueprint):
             current_time = now.strftime("%H:%M:%S")
             return f"Current Time = {current_time}"
 
-        def get_space_data(self, location: Optional[str] = None) -> str:
+        async def get_product_data(self, product_ids: Optional[List[int]] = None) -> (str, Optional[str]):
             """
-            Retrieve space data from the external API.
-            If location is provided, it can filter spaces based on location.
-            :param location: The location to filter spaces (optional).
-            :return: The available space data.
+            Retrieve product data from the external API.
+            If product_ids are provided, it fetches them individually.
+            :param product_ids: List of product IDs to retrieve (optional).
+            :return: A tuple containing the product info string and the image path (if any).
             """
-            if self.pipeline.valves.SPACE_API_KEY == "":
-                return "Space API Key not set, please set it up."
+            if self.pipeline.valves.PRODUCT_API_KEY == "":
+                return "Product API Key not set, please set it up.", None
 
-            # Define the parameters for the request
-            params = {
-                "apikey": self.pipeline.valves.SPACE_API_KEY,  # If your API requires an API key
-                "location": location if location else "",  # Optional location filter
-            }
+            if product_ids is None:
+                # Define your product IDs here. This can be dynamically fetched if your API provides such an endpoint.
+                product_ids = [1, 2]  # Update as needed
 
-            api_url = "https://7a340f9a-48e7-44ed-8852-14cd58697a9c-00-3ohyjqpej24i8.worf.replit.dev/api/spaces"  # Replace with the actual space API URL
+            base_api_url = "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/"
 
             try:
-                response = requests.get(api_url, params=params)
-                response.raise_for_status()  # Raises an HTTPError for bad responses
-                data = response.json()
+                async with aiohttp.ClientSession() as session:
+                    tasks = [self.fetch_product(session, pid, base_api_url) for pid in product_ids]
+                    products = await asyncio.gather(*tasks)
 
-                # Debugging the response to check its structure
-                print(f"Data received from API: {data}")
+                # Filter out any None results due to failed requests or validation errors
+                products = [prod for prod in products if prod is not None]
 
-                # Handling case where data is a list of lists
-                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], list):
-                    # Extracting values from the list using indices
-                    space_info = f"ID: {data[0][0]}, Location: {data[0][2]}, Price: ${data[0][3]} per month, Type: {data[0][6]}"
+                if products:
+                    formatted_products = []
+                    for product in products:
+                        product_info = (
+                            f"Content: {product.content}, "
+                            f"Description: {product.description}, "
+                            f"Image URL: {product.image_url}"
+                        )
+                        formatted_products.append(product_info)
+                        logger.debug(f"Formatted product info: {product_info}")
 
-                    # Download the image (make sure to handle relative URLs)
-                    image_url = self.get_full_url(data[0][7])
-                    image_path = self.download_image(image_url)
-                    return space_info, image_path
+                    formatted_output = "\n".join(formatted_products)
+                    return formatted_output, None  # Image handling can be adjusted as needed
                 else:
-                    return "No available spaces found.", None
-            except requests.exceptions.HTTPError as e:
-                return f"Error occurred: {str(e)}", None
+                    return "No products found or all retrievals failed.", None
+
             except Exception as e:
+                logger.exception(f"An error occurred while retrieving product data: {str(e)}")
                 return f"An error occurred while retrieving data: {str(e)}", None
 
-        def get_full_url(self, relative_url: str) -> str:
+        async def fetch_product(self, session: aiohttp.ClientSession, pid: int, base_url: str) -> Optional[Product]:
             """
-            Construct a full URL from a relative path.
-            :param relative_url: The relative or full URL of the image.
-            :return: The full URL of the image.
+            Fetch a single product by ID and validate it.
+            :param session: The aiohttp client session.
+            :param pid: The product ID.
+            :param base_url: The base API URL.
+            :return: A Product instance or None if failed.
             """
-            base_url = "https://7a340f9a-48e7-44ed-8852-14cd58697a9c-00-3ohyjqpej24i8.worf.replit.dev"
-            if not relative_url.startswith("http"):
-                return f"{base_url}/{relative_url.lstrip('/')}"
-            return relative_url
+            try:
+                url = f"{base_url}{pid}"
+                headers = {
+                    "Authorization": f"Bearer {self.pipeline.valves.PRODUCT_API_KEY}"
+                }
+                async with session.get(url, headers=headers) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    product = Product(**data)
+                    return product
+            except aiohttp.ClientResponseError as e:
+                logger.error(f"Failed to retrieve product ID {pid}: {e.status} {e.message}")
+                return None
+            except ValidationError as ve:
+                logger.error(f"Validation error for product ID {pid}: {ve}")
+                return None
+            except Exception as e:
+                logger.error(f"Error retrieving product ID {pid}: {str(e)}")
+                return None
 
-        def download_image(self, image_url: str) -> str:
+        def download_image(self, image_url: str) -> Optional[str]:
             """
             Download an image from the provided URL and save it locally.
             :param image_url: The URL of the image to download.
-            :return: The local path of the saved image.
+            :return: The local path of the saved image or None if failed.
             """
             try:
                 # Assuming the image URL is already a direct link
@@ -100,11 +137,11 @@ class Pipeline(FunctionCallingBlueprint):
                 with open(image_path, "wb") as f:
                     f.write(response.content)
 
-                print(f"Image downloaded and saved at {image_path}")
+                logger.info(f"Image downloaded and saved at {image_path}")
                 return image_path
 
             except Exception as e:
-                print(f"Failed to download image: {str(e)}")
+                logger.error(f"Failed to download image: {str(e)}")
                 return None
 
         def calculator(self, equation: str) -> str:
@@ -116,17 +153,17 @@ class Pipeline(FunctionCallingBlueprint):
                 result = eval(equation)
                 return f"{equation} = {result}"
             except Exception as e:
-                print(e)
+                logger.error(f"Calculator error: {str(e)}")
                 return "Invalid equation"
 
     def __init__(self):
         super().__init__()
-        self.name = "My Tools Pipeline"
+        self.name = "Product Tools Pipeline"  # Updated name
         self.valves = self.Valves(
             **{
                 **self.valves.model_dump(),
                 "pipelines": ["*"],  # Connect to all pipelines
-                "SPACE_API_KEY": os.getenv("SPACE_API_KEY", ""),  # Set this key through environment variables
+                "PRODUCT_API_KEY": os.getenv("PRODUCT_API_KEY", ""),  # Updated from SPACE_API_KEY
             },
         )
         self.tools = self.Tools(self)
@@ -138,43 +175,35 @@ class Pipeline(FunctionCallingBlueprint):
         :param user: User information.
         :return: The modified body with responses.
         """
-        print(f"Inlet function called - Processing Request")
-        print(f"Request body: {body}")
-        print(f"User info: {user}")
+        logger.info("Inlet function called - Processing Request")
+        logger.debug(f"Request body: {body}")
+        logger.debug(f"User info: {user}")
 
         # Initialize a response message list
         response_messages = []
 
         # Check user role and perform actions
         if user.get("role", "unknown") in self.valves.target_user_roles:
-            print(f"User role verified")
+            logger.info("User role verified")
 
-            # Retrieve space data (optional location filter can be used)
-            api_data, image_path = self.tools.get_space_data(location="Downtown")  # Example with location filter
-            print(f"API Data Retrieved: {api_data}")  # Debugging API response
+            # Retrieve product data (no location filter needed unless applicable)
+            api_data, image_path = await self.tools.get_product_data()  # No location filter
+            logger.debug(f"API Data Retrieved: {api_data}")
 
             if api_data:
-                response_message = f"Available Space Details: {api_data}"
+                response_message = f"Available Product Details:\n{api_data}"
                 response_messages.append({
                     "role": "assistant",
                     "content": response_message
                 })
 
-                # If the image was downloaded successfully, add it to the response
-                if image_path:
-                    response_messages.append({
-                        "role": "assistant",
-                        "content": f"![Space Image]({image_path})"  # This will display the image if supported by the platform
-                    })
-                else:
-                    response_messages.append({
-                        "role": "assistant",
-                        "content": "Failed to download the image."
-                    })
+                # If you want to handle images, you can iterate and download them
+                # For simplicity, we're not downloading images here. If needed, adjust accordingly.
+
             else:
                 response_messages.append({
                     "role": "assistant",
-                    "content": "No available spaces found."
+                    "content": "No available products found."
                 })
 
             # Adding current time to the response
@@ -187,12 +216,12 @@ class Pipeline(FunctionCallingBlueprint):
         else:
             response_messages.append({
                 "role": "assistant",
-                "content": "Your role does not permit space data retrieval."
+                "content": "Your role does not permit product data retrieval."
             })
 
-        # Append the space data or error message as the assistant's response
+        # Append the product data or error message as the assistant's response
         if response_messages:
             body["messages"].extend(response_messages)
-            print(f"Final response being returned: {body['messages']}")
+            logger.debug(f"Final response being returned: {body['messages']}")
 
         return body
