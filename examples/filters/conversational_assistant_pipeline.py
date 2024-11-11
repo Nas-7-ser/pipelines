@@ -6,9 +6,9 @@ from pydantic import BaseModel, HttpUrl, ValidationError
 import logging
 import re
 
-# Import the language model function
+# Import the necessary functions to call the language model
 # Adjust the import based on your Open WebUI setup
-# from openai_conversation import generate_assistant_reply
+from api import OpenAIClient
 
 class Product(BaseModel):
     content: str
@@ -40,6 +40,9 @@ class Pipeline:
             ]
         )
         self.logger = logging.getLogger(self.name)
+
+        # Initialize the OpenAI client
+        self.client = OpenAIClient()
 
     def on_startup(self):
         # This function is called when the server is started.
@@ -91,9 +94,9 @@ Remember to follow the instructions and provide responses in a conversational ma
             conversation.extend(messages)
 
             # Call the language model to generate the assistant's reply
-            assistant_reply = self.generate_assistant_reply(conversation)
+            assistant_reply = self.generate_assistant_reply(conversation, model_id)
         else:
-            assistant_reply = "I'm sorry, but I couldn't retrieve product information at this time."
+            assistant_reply = "Je suis désolé, mais je ne peux pas récupérer les informations sur les produits pour le moment."
 
         # Return the assistant's reply
         return assistant_reply
@@ -187,7 +190,7 @@ Remember to follow the instructions and provide responses in a conversational ma
         """
         Format the list of structured products into a Markdown string.
         """
-        markdown_output = "### Product Catalog\n\n"
+        markdown_output = "### Catalogue de Produits\n\n"
 
         # Add each product to the markdown output
         for idx, product in enumerate(products, start=1):
@@ -197,23 +200,29 @@ Remember to follow the instructions and provide responses in a conversational ma
 
         return markdown_output
 
-    def generate_assistant_reply(self, conversation: List[dict]) -> str:
+    def generate_assistant_reply(self, conversation: List[dict], model_id: str) -> str:
         """
         Generate the assistant's reply using the language model.
         """
-        # This function should call the language model API provided by Open WebUI
-        # Adjust the function call based on your Open WebUI setup
-        # For example, if using the 'completion' function:
+        # Use the OpenAIClient to generate the assistant's reply
+        try:
+            # Prepare the parameters
+            payload = {
+                "model": model_id,
+                "messages": conversation,
+                "temperature": 0.7,
+                "max_tokens": 500,
+                "stream": False,
+            }
 
-        # Import the completion function from Open WebUI
-        from completion import openai_completion  # Adjust the import as needed
+            # Call the chat completion function
+            response = self.client.chat_completion(payload)
 
-        # Call the completion function with the conversation
-        assistant_reply = openai_completion(
-            messages=conversation,
-            model="gpt-3.5-turbo",  # Replace with your model ID
-            max_tokens=500,
-            temperature=0.7,
-        )
+            # Extract the assistant's reply from the response
+            assistant_reply = response["choices"][0]["message"]["content"]
 
-        return assistant_reply
+            return assistant_reply
+
+        except Exception as e:
+            self.logger.exception(f"An error occurred while generating assistant reply: {str(e)}")
+            return "Je suis désolé, mais je ne peux pas répondre à votre demande pour le moment."
