@@ -62,7 +62,7 @@ class Pipeline(FunctionCallingBlueprint):
 
             if product_ids is None:
                 # Define your product IDs here. This can be dynamically fetched if your API provides such an endpoint.
-                product_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]  # Update as needed
+                product_ids = [1, 2]  # Update as needed
 
             base_api_url = "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/"
 
