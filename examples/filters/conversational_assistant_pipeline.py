@@ -6,9 +6,11 @@ from pydantic import BaseModel, HttpUrl, ValidationError
 import logging
 import re
 
-# Import the necessary functions to call the language model
-# Adjust the import based on your Open WebUI setup
-from api import OpenAIClient
+# Remove the import that causes the error
+# from api import OpenAIClient  # This module does not exist
+
+# Import the function to call the language model
+from openai_api import get_completion  # Adjust the import based on your Open WebUI setup
 
 class Product(BaseModel):
     content: str
@@ -25,7 +27,7 @@ class Pipeline:
         BASE_API_URL: str = "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/"  # Replace with your actual API URL
 
     def __init__(self):
-        self.name = "Product Tools Pipeline"
+        self.name = "Conversational Assistant Pipeline"
         self.valves = self.Valves(
             BASE_API_URL=os.getenv("BASE_API_URL", "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/")
         )
@@ -40,9 +42,6 @@ class Pipeline:
             ]
         )
         self.logger = logging.getLogger(self.name)
-
-        # Initialize the OpenAI client
-        self.client = OpenAIClient()
 
     def on_startup(self):
         # This function is called when the server is started.
@@ -84,7 +83,6 @@ Use the following product data to assist the user:
 Remember to follow the instructions and provide responses in a conversational manner.
 
 """
-
             # Add the assistant context as a system message
             conversation = [
                 {"role": "system", "content": assistant_context}
@@ -204,7 +202,6 @@ Remember to follow the instructions and provide responses in a conversational ma
         """
         Generate the assistant's reply using the language model.
         """
-        # Use the OpenAIClient to generate the assistant's reply
         try:
             # Prepare the parameters
             payload = {
@@ -215,8 +212,8 @@ Remember to follow the instructions and provide responses in a conversational ma
                 "stream": False,
             }
 
-            # Call the chat completion function
-            response = self.client.chat_completion(payload)
+            # Call the language model function
+            response = get_completion(payload)
 
             # Extract the assistant's reply from the response
             assistant_reply = response["choices"][0]["message"]["content"]
