@@ -104,7 +104,7 @@ class Pipeline:
             return "API URL not set, please set it up."
 
         if product_ids is None:
-            product_ids = [1, 2]  # Update as needed
+            product_ids = [1, 2, 3]  # Update as needed
 
         base_api_url = self.valves.BASE_API_URL
 
