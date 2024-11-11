@@ -22,12 +22,12 @@ class StructuredProduct(BaseModel):
 
 class Pipeline:
     class Valves(BaseModel):
-        BASE_API_URL: str = "https://your_api_url_here.com/data/"  # Replace with your actual API URL
+        BASE_API_URL: str = "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/"  # Replace with your actual API URL
 
     def __init__(self):
         self.name = "Product Tools Pipeline"
         self.valves = self.Valves(
-            BASE_API_URL=os.getenv("BASE_API_URL", "https://your_api_url_here.com/data/")
+            BASE_API_URL=os.getenv("BASE_API_URL", "https://8b33b8d0-de52-4c5c-a799-f440d0d6112a-00-1eqvns0ze6d2x.picard.replit.dev/data/")
         )
 
         # Configure logging
